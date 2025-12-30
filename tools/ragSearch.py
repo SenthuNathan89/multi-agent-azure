@@ -24,13 +24,14 @@ class AzureSearchVector:
             
             # Test connection
             # print(f"  Testing connection...")
+            
             # Try to get document count
             results = self.client.search(search_text="*", top=1, include_total_count=True)
             print(f"Connected successfully to Azure Search")
             
         except Exception as e:
             print(f"Failed to initialize Azure Search client")
-            # print(f"Error type: {type(e).__name__}")
+            print(f"Error type: {type(e).__name__}")
             print(f"Error message: {e}")
             raise
     
@@ -40,7 +41,7 @@ class AzureSearchVector:
             
             # Generate embedding
             query_vector = self.embeddings.embed_query(query)
-            # print(f"Generated embedding vector of length: {len(query_vector)}")
+            print(f"Generated embedding vector of length: {len(query_vector)}")
             
             # Create vector query
             vector_query = VectorizedQuery(
@@ -49,26 +50,51 @@ class AzureSearchVector:
                 fields=self.vector_field
             )
             
-            # print(f"Searching in field: {self.vector_field}")
-            # print(f"Returning field: {self.text_field}")
-            
-            # Search
+            # Search - select all fields to see what's available
             results = self.client.search(
                 search_text=None,
                 vector_queries=[vector_query],
-                select=[self.text_field],
                 top=k
             )
             
-            # Convert to documents
+            # Convert to documents and collect metadata
             docs = []
+            sources_info = []
+            
             for i, result in enumerate(results):
                 content = result.get(self.text_field, "")
                 if content:
-                    print(f" Result {i+1}: {content[:100]}...")
-                    docs.append(Document(page_content=content))
+                    # print(f" Result {i+1}: {content[:100]}...")
+                    # Extract source information - use .get() to avoid KeyError
+                    source_data = {
+                        "id": result.get("parent_id", "N/A"),
+                        "path": result.get("filepath", "N/A"),
+                        "title": result.get("title", "N/A")
+                    }
+                    sources_info.append(source_data)
+                    
+                    # Create document with metadata
+                    docs.append(Document(
+                        page_content=content,
+                        metadata=source_data
+                    ))
             
-            print(f"Found {len(docs)} results")
+            print(f"Found {len(docs)} results (but may have multiple differing chunks from the same source file)")
+            # Remove duplicates by converting to tuples
+            unique_tuples = set(tuple(sorted(d.items())) for d in sources_info)
+            sources_info = [dict(t) for t in unique_tuples]
+            
+            # Print all unique sources at the end
+            print("*"*100 +"\n")
+
+            print(f"Sources from Azure AI Search ({len(sources_info)} total):")
+            for i, source in enumerate(sources_info, 1):
+                print(f"\nSource {i}:")
+                print(f"  Document ID: {source.get('id', 'N/A')}")
+                print(f"  File Path: {source.get('path', 'N/A')}")
+                print(f"  Title: {source.get('title', 'N/A')}")
+                print("-"*100 + "\n")
+            
             return docs
             
         except Exception as e:
