@@ -46,10 +46,16 @@ def web_search(query: str,  num_results: int = 3) -> str:
                 max_results=3,
                 search_depth="basic"  # or "advanced" for more thorough search
             )
-        print(response)
+        print(f"\n Sources from Tavily Web Search ({len(response)} total):")
+        print("*"*100 +"\n")
+        for result in response['results']:
+            print(result['url'])
+        
         return response['results']
+
     except ValueError as e:
         print(f"{e}")
+
 
 
 
